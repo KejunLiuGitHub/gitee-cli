@@ -2,6 +2,8 @@
 
 [Gitee](https://gitee.com) API v5 命令行工具，灵感来自 [`gh`](https://cli.github.com/)（GitHub CLI）。
 
+简体中文 | [English](README_EN.md)
+
 无需离开终端，管理 Issue、Pull Request、标签等。
 
 ## 快速开始
