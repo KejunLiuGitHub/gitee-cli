@@ -38,24 +38,24 @@ _gitee_context() {
 
 # ─── HTTP Helpers ─────────────────────────────────────────
 _gitee_get() {
-    local path="$1"; shift
+    local endpoint="$1"; shift
     curl -sSf -H "Content-Type: application/json;charset=UTF-8" \
-        "${GITEE_API}${path}?access_token=${GITEE_TOKEN}&$*" 2>/dev/null
+        "${GITEE_API}${endpoint}?access_token=${GITEE_TOKEN}&$*" 2>/dev/null
 }
 
 _gitee_post() {
-    local path="$1"; shift
+    local endpoint="$1"; shift
     local data="$1"; shift
     curl -sSf -X POST -H "Content-Type: application/json;charset=UTF-8" \
-        "${GITEE_API}${path}" \
+        "${GITEE_API}${endpoint}" \
         -d "{\"access_token\":\"${GITEE_TOKEN}\",$data}" 2>/dev/null
 }
 
 _gitee_patch() {
-    local path="$1"; shift
+    local endpoint="$1"; shift
     local data="$1"; shift
     curl -sSf -X PATCH -H "Content-Type: application/json;charset=UTF-8" \
-        "${GITEE_API}${path}" \
+        "${GITEE_API}${endpoint}" \
         -d "{\"access_token\":\"${GITEE_TOKEN}\",$data}" 2>/dev/null
 }
 
