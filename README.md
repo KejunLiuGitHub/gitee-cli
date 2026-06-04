@@ -110,15 +110,15 @@ The token is passed via `access_token` in the request body (POST/PATCH) or query
 - **Gitee issue creation API is different from GitHub**: The endpoint is `POST /v5/repos/{owner}/issues` and the `repo` name goes in the request body — not in the URL path. This is a key difference from GitHub's `POST /repos/{owner}/{repo}/issues`.
 - All POST/PATCH requests send the token in the request body as `access_token`. GET requests pass it as a query parameter.
 - The tool defaults to reading from `python3` for JSON formatting. If `python3` is not available, raw JSON is printed instead.
-要在 Windows 上使用这个库，请选择以下任一方式：
+- 要在 Windows 上使用这个库，请选择以下任一方式：
 
-使用 Git Bash（推荐）：
+1、使用 Git Bash（推荐）：
 安装 Git for Windows。
 右键点击项目文件夹，选择 "Git Bash Here"。
 在该终端窗口中，确保配置好了环境变量（如 GITEE_TOKEN），然后即可像 Linux/Mac 一样正常使用 source gitee 或直接调用命令。
-使用 WSL (Windows Subsystem for Linux)：
+2、使用 WSL (Windows Subsystem for Linux)：
 将代码复制到你的 WSL 目录中，即可完美运行，体验与 Linux 无二。
-注意 Python 路径：
+另外注意 Python 路径：
 脚本中硬编码调用了 python3。如果你在 Windows 环境下（例如 Cygwin 或特定的 MSYS2 环境）发现报错找不到 python3，你可能需要将脚本中的 python3 替换为你环境中实际存在的命令名称（通常是 python）。
 
 ## License
