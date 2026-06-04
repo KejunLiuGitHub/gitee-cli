@@ -82,7 +82,7 @@ gitee assign <issue-num> <username>   # Assign issue to user
 - `python3` for JSON pretty-printing
 - `git remote` to infer the current repository
 
-The token is passed via `access_token` in the request body (POST/PATCH) or query string (GET), consistent with Gitee API v5 conventions.
+The token is passed via `Authorization: token` header (bearer-style), never in URL or request body. HTTP status codes are checked before processing the response.
 
 ## Environment variables
 
@@ -108,7 +108,7 @@ The token is passed via `access_token` in the request body (POST/PATCH) or query
 ## Notes
 
 - **Gitee issue creation API is different from GitHub**: The endpoint is `POST /v5/repos/{owner}/issues` and the `repo` name goes in the request body — not in the URL path. This is a key difference from GitHub's `POST /repos/{owner}/{repo}/issues`.
-- All POST/PATCH requests send the token in the request body as `access_token`. GET requests pass it as a query parameter.
+- Token is sent via `Authorization` header for all requests (never in URL or body).
 - The tool defaults to reading from `python3` for JSON formatting. If `python3` is not available, raw JSON is printed instead.
 - 要在 Windows 上使用这个库，请选择以下任一方式：
 
