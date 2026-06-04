@@ -56,6 +56,8 @@ gitee issue view <编号>             # 查看 Issue 详情
 gitee issue close <编号>            # 关闭 Issue
 gitee issue reopen <编号>           # 重新打开 Issue
 gitee issue comment <编号> "正文"   # 添加评论
+gitee issue edit <编号>             # 编辑 Issue
+      [--title] [--body] [--labels]
 ```
 
 ### Pull Request
@@ -65,13 +67,23 @@ gitee pr list [状态]                                       # 列出 PR
 gitee pr create "标题" "正文" --head 分支 [--base main]    # 创建 PR
 gitee pr view <编号>                                       # 查看 PR 详情
 gitee pr merge <编号>                                      # 合并 PR
+gitee pr close <编号>                                      # 关闭 PR
+gitee pr edit <编号> [--title] [--body]                    # 编辑 PR
+gitee pr checkout <编号>                                   # 检出 PR 分支
+```
+
+### 标签
+
+```bash
+gitee label list                      # 列出标签
+gitee label create <名称> <颜色>      # 创建标签（颜色为 6 位 hex）
+gitee label delete <名称>             # 删除标签
 ```
 
 ### 仓库
 
 ```bash
-gitee repo          # 查看仓库信息（名称、star、fork 等）
-gitee labels        # 列出标签及颜色
+gitee repo          # 查看仓库信息
 gitee whoami        # 查看当前登录用户
 gitee assign <issue编号> <用户名>   # 指派 Issue
 ```

@@ -56,7 +56,7 @@ _gitee_http() {
                 --connect-timeout 10 --max-time 30 \
                 "${GITEE_API}${endpoint}?$*" 2>/dev/null) || true
             ;;
-        POST|PATCH)
+        POST|PATCH|DELETE)
             http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
                 -X "$method" \
                 -H "Content-Type: application/json;charset=UTF-8" \
@@ -165,7 +165,23 @@ if labels: print(f'\n\U0001f3f7 {labels}')
                 "$(_json_build "body=${body}")" \
                 | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Comment added to #${num}')" 2>/dev/null || true
             ;;
-        *) echo "Usage: gitee issue {list|create|view|close|reopen|comment} [args...]" ;;
+        edit)
+            local num="${2:-}" title="" body="" labels=""
+            shift 2 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --title) title="$2"; shift 2 ;;
+                    --body) body="$2"; shift 2 ;;
+                    --labels|-l) labels="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$num" ]] && { echo "Usage: gitee issue edit <number> [--title \"...\"] [--body \"...\"] [--labels \"l1,l2\"]"; return 1; }
+            _gitee_http PATCH "/repos/${GITEE_OWNER}/issues/${num}" \
+                "$(_json_build "repo=${GITEE_REPO}" ${title:+"title=${title}"} ${body:+"body=${body}"} ${labels:+"labels=${labels}"})" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Updated #{d[\"number\"]}')" 2>/dev/null || true
+            ;;
+        *) echo "Usage: gitee issue {list|create|view|close|reopen|comment|edit} [args...]" ;;
     esac
 }
 
@@ -223,7 +239,42 @@ print(p.get('body','(no body)'))
             _gitee_http POST "/repos/${GITEE_OWNER}/${GITEE_REPO}/pulls/${num}/merge" "{}" \
                 | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Merged PR #{num}')" 2>/dev/null || true
             ;;
-        *) echo "Usage: gitee pr {list|create|view|merge} [args...]" ;;
+        close)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee pr close <number>"; return 1; }
+            _gitee_http PATCH "/repos/${GITEE_OWNER}/${GITEE_REPO}/pulls/${num}" \
+                '{"state":"closed"}' \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Closed PR #{d[\"number\"]}')" 2>/dev/null || true
+            ;;
+        edit)
+            local num="${2:-}" title="" body=""
+            shift 2 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --title) title="$2"; shift 2 ;;
+                    --body) body="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$num" ]] && { echo "Usage: gitee pr edit <number> [--title \"...\"] [--body \"...\"]"; return 1; }
+            _gitee_http PATCH "/repos/${GITEE_OWNER}/${GITEE_REPO}/pulls/${num}" \
+                "$(_json_build ${title:+"title=${title}"} ${body:+"body=${body}"})" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Updated PR #{d[\"number\"]}')" 2>/dev/null || true
+            ;;
+        checkout|co)
+            local num="${2:-}" branch="${3:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee pr checkout <number> [branch-name]"; return 1; }
+            local pr_json head_ref head_repo
+            pr_json=$(_gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/pulls/${num}" "" 2>/dev/null || true)
+            head_ref=$(echo "$pr_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['head']['ref'])" 2>/dev/null)
+            head_repo=$(echo "$pr_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['head']['repo']['full_name'])" 2>/dev/null)
+            [[ -z "$head_ref" ]] && { echo "❌ Cannot find PR #${num}"; return 1; }
+            local local_branch="${branch:-$head_ref}"
+            git fetch gitee "${head_repo##*/}" 2>/dev/null || git fetch origin "${head_repo##*/}" 2>/dev/null || {
+                echo "❌ Cannot fetch PR branch. Add a gitee remote, or fetch manually."; return 1; }
+            git checkout -b "$local_branch" FETCH_HEAD 2>/dev/null || git checkout "$local_branch" 2>/dev/null
+            ;;
+        *) echo "Usage: gitee pr {list|create|view|merge|close|edit|checkout} [args...]" ;;
     esac
 }
 
@@ -246,17 +297,38 @@ print(f'URL: {r[\"html_url\"]}')
 }
 
 # ─── Labels ──────────────────────────────────────────────────
-gitee_labels() {
+gitee_label() {
     _check_token || return 1
     _gitee_context || return 1
-    _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/labels" "" \
-        | python3 -c "
+    local cmd="${1:-list}"
+    case "$cmd" in
+        list|ls)
+            _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/labels" "" \
+                | python3 -c "
 import sys,json
 labels=json.load(sys.stdin)
 for l in labels:
     print(f'{l[\"name\"]:20} #{l[\"color\"]}')
 " 2>/dev/null || true
+            ;;
+        create|new)
+            local name="${2:-}" color="${3:-}"
+            [[ -z "$name" || -z "$color" ]] && { echo "Usage: gitee label create <name> <color-hex>"; echo "Example: gitee label create P0 3d866d"; return 1; }
+            color="${color#\#}"
+            _gitee_http POST "/repos/${GITEE_OWNER}/${GITEE_REPO}/labels" \
+                "$(_json_build "name=${name}" "color=${color}")" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Label created: {d[\"name\"]} #{d[\"color\"]}')" 2>/dev/null || true
+            ;;
+        delete|rm)
+            local name="${2:-}"
+            [[ -z "$name" ]] && { echo "Usage: gitee label delete <name>"; return 1; }
+            _gitee_http DELETE "/repos/${GITEE_OWNER}/${GITEE_REPO}/labels/${name}" "" \
+                | python3 -c "print('✅ Label deleted: ${name}')" 2>/dev/null || true
+            ;;
+        *) echo "Usage: gitee label {list|create|delete} [args...]" ;;
+    esac
 }
+gitee_labels() { gitee_label list "$@"; }  # backward compat
 
 # ─── Whoami ──────────────────────────────────────────────────
 gitee_whoami() {
@@ -283,7 +355,7 @@ gitee() {
         issue|issues)    shift; gitee_issue "$@" ;;
         pr|pull)         shift; gitee_pr "$@" ;;
         repo)            shift; gitee_repo "$@" ;;
-        labels)          shift; gitee_labels "$@" ;;
+        label|labels)    shift; gitee_label "$@" ;;
         whoami|who)      shift; gitee_whoami "$@" ;;
         assign)          shift; gitee_assign "$@" ;;
         help|--help|-h)
@@ -296,13 +368,21 @@ gitee() {
             echo "  gitee issue close <number>            Close issue"
             echo "  gitee issue reopen <number>           Reopen issue"
             echo "  gitee issue comment <n> <body>        Add comment"
+            echo "  gitee issue edit <number>             Edit issue"
+            echo "         [--title] [--body] [--labels]"
             echo "  gitee pr list [state]                 List PRs"
             echo "  gitee pr create <title> <body>        Create PR"
             echo "         --head <branch> [--base <branch>]"
             echo "  gitee pr view <number>                View PR"
             echo "  gitee pr merge <number>               Merge PR"
+            echo "  gitee pr close <number>               Close PR"
+            echo "  gitee pr edit <number>                Edit PR"
+            echo "         [--title] [--body]"
+            echo "  gitee pr checkout <number>            Checkout PR branch"
             echo "  gitee repo                            Show repo info"
-            echo "  gitee labels                          List labels"
+            echo "  gitee label list                      List labels"
+            echo "  gitee label create <name> <color>     Create label"
+            echo "  gitee label delete <name>             Delete label"
             echo "  gitee assign <issue> <username>       Assign issue"
             echo "  gitee whoami                          Show current user"
             echo ""
