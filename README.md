@@ -1,126 +1,122 @@
 # gitee-cli
 
-Command-line interface for [Gitee](https://gitee.com) API v5, inspired by [`gh`](https://cli.github.com/) (the GitHub CLI).
+[Gitee](https://gitee.com) API v5 命令行工具，灵感来自 [`gh`](https://cli.github.com/)（GitHub CLI）。
 
-Manage issues, pull requests, labels, and more — without leaving the terminal.
+无需离开终端，管理 Issue、Pull Request、标签等。
 
-## Quick start
+## 快速开始
 
-### 1. Get a personal access token
+### 1. 获取个人访问令牌
 
-Gitee → Settings → Private Token → generate.
-The token needs `projects`, `issues`, `pull_requests` scopes.
+Gitee → 设置 → 私人令牌 → 生成。勾选 `projects`、`issues`、`pull_requests` 权限。
 
-### 2. Install
+### 2. 安装
 
 ```bash
-# Source in your shell config for permanent use:
-echo "source /path/to/gitee" >> ~/.zshrc   # or ~/.bashrc
+# 加入 Shell 配置以永久使用：
+echo "source /path/to/gitee" >> ~/.zshrc   # 或 ~/.bashrc
 ```
 
-Or copy `gitee` anywhere on your PATH and make it executable:
+或复制 `gitee` 到 PATH 中的任意位置并添加执行权限：
+
 ```bash
 sudo cp gitee /usr/local/bin/
 sudo chmod +x /usr/local/bin/gitee
 ```
 
-### 3. Authenticate
+### 3. 认证
 
 ```bash
-export GITEE_TOKEN="your-token"
+export GITEE_TOKEN="你的令牌"
 ```
 
-### 4. Use it
+### 4. 使用
 
-The tool infers the repository from your git remote (`gitee` remote first, then `origin`):
+工具会自动从 git remote 推断仓库（优先 `gitee` remote，其次 `origin`）：
 
 ```bash
-git remote add gitee https://gitee.com/<owner>/<repo>.git
+git remote add gitee https://gitee.com/<用户名>/<仓库名>.git
 ```
 
-Or set explicitly:
-```bash
-export GITEE_OWNER="your-namespace"
-export GITEE_REPO="your-repo"
-```
-
-## Commands
-
-### Issues
+或手动指定：
 
 ```bash
-gitee issue list [state]              # List issues (default: open)
-gitee issue create "title" "body"     # Create issue (labels optional)
-gitee issue view <number>             # Show issue details
-gitee issue close <number>            # Close issue
-gitee issue reopen <number>           # Reopen issue
-gitee issue comment <number> "body"   # Add comment
+export GITEE_OWNER="你的命名空间"
+export GITEE_REPO="你的仓库"
 ```
 
-### Pull Requests
+## 命令参考
+
+### Issue
 
 ```bash
-gitee pr list [state]                                       # List PRs
-gitee pr create "title" "body" --head branch [--base main]  # Create PR
-gitee pr view <number>                                      # Show PR details
-gitee pr merge <number>                                     # Merge PR
+gitee issue list [状态]              # 列出 Issue（默认: open）
+gitee issue create "标题" "正文"     # 创建 Issue（可选标签）
+gitee issue view <编号>             # 查看 Issue 详情
+gitee issue close <编号>            # 关闭 Issue
+gitee issue reopen <编号>           # 重新打开 Issue
+gitee issue comment <编号> "正文"   # 添加评论
 ```
 
-### Repository
+### Pull Request
 
 ```bash
-gitee repo          # Show repo info (name, stars, forks, etc.)
-gitee labels        # List labels with colors
-gitee whoami        # Show authenticated user
-gitee assign <issue-num> <username>   # Assign issue to user
+gitee pr list [状态]                                       # 列出 PR
+gitee pr create "标题" "正文" --head 分支 [--base main]    # 创建 PR
+gitee pr view <编号>                                       # 查看 PR 详情
+gitee pr merge <编号>                                      # 合并 PR
 ```
 
-## How it works
+### 仓库
 
-`gitee` is a shell script that wraps the [Gitee OpenAPI v5](https://gitee.com/api/v5/swagger) REST endpoints. It uses:
-- `curl` for HTTP requests
-- `python3` for JSON pretty-printing
-- `git remote` to infer the current repository
+```bash
+gitee repo          # 查看仓库信息（名称、star、fork 等）
+gitee labels        # 列出标签及颜色
+gitee whoami        # 查看当前登录用户
+gitee assign <issue编号> <用户名>   # 指派 Issue
+```
 
-The token is passed via `Authorization: token` header (bearer-style), never in URL or request body. HTTP status codes are checked before processing the response.
+## 工作原理
 
-## Environment variables
+`gitee` 是一个 shell 脚本，封装 [Gitee OpenAPI v5](https://gitee.com/api/v5/swagger) REST 接口：
 
-| Variable | Required | Default |
-|----------|----------|---------|
-| `GITEE_TOKEN` | Yes | — |
-| `GITEE_OWNER` | No | Inferred from git remote |
-| `GITEE_REPO` | No | Inferred from git remote |
-| `GITEE_API_BASE` | No | `https://gitee.com/api/v5` |
+- `curl` — HTTP 请求
+- `python3` — JSON 格式化
+- `git remote` — 自动推断当前仓库
 
-## Comparison with `gh`
+令牌通过 `Authorization` 请求头发送，**不出现**在 URL 或请求体中。所有请求均校验 HTTP 状态码。
 
-| Feature | `gh` (GitHub) | `gitee` |
-|---------|---------------|---------|
-| Auth | `gh auth login` | `export GITEE_TOKEN=...` |
-| Issue/PR/Repo CRUD | Yes | Yes |
-| Actions/CI | Yes | No |
-| Codespaces | Yes | No |
-| Extensions | Yes | No |
+## 环境变量
 
-`gitee` covers issue/PR/repo management — the day-to-day collaboration commands. It does not wrap Gitee-specific features like GVP, Pages, or Enterprise API.
+| 变量 | 必填 | 默认值 |
+|------|------|--------|
+| `GITEE_TOKEN` | 是 | — |
+| `GITEE_OWNER` | 否 | 从 git remote 推断 |
+| `GITEE_REPO` | 否 | 从 git remote 推断 |
+| `GITEE_API_BASE` | 否 | `https://gitee.com/api/v5` |
 
-## Notes
+## 与 `gh` 对比
 
-- **Gitee issue creation API is different from GitHub**: The endpoint is `POST /v5/repos/{owner}/issues` and the `repo` name goes in the request body — not in the URL path. This is a key difference from GitHub's `POST /repos/{owner}/{repo}/issues`.
-- Token is sent via `Authorization` header for all requests (never in URL or body).
-- The tool defaults to reading from `python3` for JSON formatting. If `python3` is not available, raw JSON is printed instead.
-- 要在 Windows 上使用这个库，请选择以下任一方式：
+| 功能 | `gh` (GitHub) | `gitee` |
+|------|---------------|---------|
+| 认证 | `gh auth login` | `export GITEE_TOKEN=...` |
+| Issue/PR/Repo 增删改查 | 有 | 有 |
+| Actions/CI | 有 | 无 |
+| Codespaces | 有 | 无 |
+| 扩展 | 有 | 无 |
 
-1、使用 Git Bash（推荐）：
-安装 Git for Windows。
-右键点击项目文件夹，选择 "Git Bash Here"。
-在该终端窗口中，确保配置好了环境变量（如 GITEE_TOKEN），然后即可像 Linux/Mac 一样正常使用 source gitee 或直接调用命令。
-2、使用 WSL (Windows Subsystem for Linux)：
-将代码复制到你的 WSL 目录中，即可完美运行，体验与 Linux 无二。
-另外注意 Python 路径：
-脚本中硬编码调用了 python3。如果你在 Windows 环境下（例如 Cygwin 或特定的 MSYS2 环境）发现报错找不到 python3，你可能需要将脚本中的 python3 替换为你环境中实际存在的命令名称（通常是 python）。
+`gitee` 聚焦日常协作命令（Issue/PR/Repo 管理），不涉及 Gitee 特有功能（GVP、Pages、企业版 API）。
+
+## 注意事项
+
+- **Gitee Issue 创建接口与 GitHub 不同**：端点为 `POST /v5/repos/{owner}/issues`，仓库名放在请求体中，不在 URL 路径中。这与 GitHub 的 `POST /repos/{owner}/{repo}/issues` 不同。
+- 令牌通过 `Authorization` 请求头传递，不出现在 URL 或请求体中。
+- 脚本调用 `python3` 做 JSON 格式化。如果环境没有 `python3`，会输出原始 JSON。
+- **Windows 用户**：
+  1. **Git Bash（推荐）**：安装 Git for Windows，右键项目文件夹选择 "Git Bash Here"，配置好环境变量后即可正常使用。
+  2. **WSL**：将代码复制到 WSL 目录中运行，体验与 Linux 一致。
+  3. 如果 `python3` 命令不存在（如 Cygwin 或 MSYS2），将脚本中的 `python3` 替换为 `python`。
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — 见 [LICENSE](LICENSE)。
