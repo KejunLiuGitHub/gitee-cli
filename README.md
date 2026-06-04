@@ -88,6 +88,23 @@ gitee whoami        # 查看当前登录用户
 gitee assign <issue编号> <用户名>   # 指派 Issue
 ```
 
+## 测试与诊断
+
+仓库附带 `./gitee-test` 诊断脚本，方便 AI Agent 或新用户快速验证环境：
+
+```bash
+./gitee-test              # 终端输出摘要 + 生成 gitee-test-report.md
+./gitee-test my-report.md # 指定报告文件名
+```
+
+检查项包括：
+- **环境依赖**：bash、curl、python3 (≥3.6)、git
+- **配置**：GITEE_TOKEN、git remote、owner/repo 推断
+- **API 冒烟**：whoami、repo、issue list、label list、pr list、401 认证失败
+- **脚本健壮性**：语法检查、可选 shellcheck 静态分析
+
+报告为 Markdown 格式，AI 可直接读取定位问题，无需反复询问用户环境信息。
+
 ## 工作原理
 
 `gitee` 是一个 shell 脚本，封装 [Gitee OpenAPI v5](https://gitee.com/api/v5/swagger) REST 接口：
