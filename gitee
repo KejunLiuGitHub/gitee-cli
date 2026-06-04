@@ -1,0 +1,320 @@
+#!/usr/bin/env bash
+# gitee — CLI for Gitee API v5 (like gh for GitHub)
+# Install: source this file in ~/.zshrc, or copy to PATH
+# Token:  export GITEE_TOKEN="your-token"  (Gitee → 设置 → 私人令牌)
+#
+# Usage:
+#   gitee issue list                    # 列出当前仓库 issue
+#   gitee issue create "标题" "正文"     # 创建 issue
+#   gitee issue view <number>           # 查看 issue 详情
+#   gitee issue close <number>          # 关闭 issue
+#   gitee issue comment <number> "评论"  # 添加评论
+#   gitee pr list                       # 列出 PR
+#   gitee pr create "标题" "正文" \     # 创建 PR
+#        --base main --head feature
+#   gitee pr view <number>              # 查看 PR
+#   gitee pr merge <number>             # 合并 PR
+#   gitee repo                          # 查看仓库信息
+#   gitee labels                        # 列出标签
+#   gitee whoami                        # 查看当前登录用户
+
+set -euo pipefail
+
+# ─── Config ───────────────────────────────────────────────
+GITEE_API="${GITEE_API_BASE:-https://gitee.com/api/v5}"
+GITEE_TOKEN="${GITEE_TOKEN:-}"
+
+# Infer owner/repo from git remote
+_gitee_context() {
+    if [[ -z "${GITEE_OWNER:-}" ]] || [[ -z "${GITEE_REPO:-}" ]]; then
+        local remote
+        remote=$(git remote get-url gitee 2>/dev/null || git remote get-url origin 2>/dev/null || true)
+        if [[ "$remote" =~ gitee\.com[:/]([^/]+)/([^/.]+)(\.git)?$ ]]; then
+            GITEE_OWNER="${BASH_REMATCH[1]}"
+            GITEE_REPO="${BASH_REMATCH[2]}"
+        fi
+    fi
+}
+
+# ─── HTTP Helpers ─────────────────────────────────────────
+_gitee_get() {
+    local path="$1"; shift
+    curl -sSf -H "Content-Type: application/json;charset=UTF-8" \
+        "${GITEE_API}${path}?access_token=${GITEE_TOKEN}&$*" 2>/dev/null
+}
+
+_gitee_post() {
+    local path="$1"; shift
+    local data="$1"; shift
+    curl -sSf -X POST -H "Content-Type: application/json;charset=UTF-8" \
+        "${GITEE_API}${path}" \
+        -d "{\"access_token\":\"${GITEE_TOKEN}\",$data}" 2>/dev/null
+}
+
+_gitee_patch() {
+    local path="$1"; shift
+    local data="$1"; shift
+    curl -sSf -X PATCH -H "Content-Type: application/json;charset=UTF-8" \
+        "${GITEE_API}${path}" \
+        -d "{\"access_token\":\"${GITEE_TOKEN}\",$data}" 2>/dev/null
+}
+
+# ─── Auth Check ───────────────────────────────────────────
+_check_token() {
+    if [[ -z "$GITEE_TOKEN" ]]; then
+        echo "❌ GITEE_TOKEN not set. Export it:"
+        echo "   export GITEE_TOKEN=\"your-token\""
+        echo "   (Get one at: Gitee → 设置 → 私人令牌)"
+        return 1
+    fi
+}
+
+# ─── Issue Commands ───────────────────────────────────────
+gitee_issue() {
+    _check_token || return 1
+    _gitee_context
+
+    local cmd="${1:-list}"
+    case "$cmd" in
+        list|ls)
+            local state="${2:-open}"
+            _gitee_get "/repos/${GITEE_OWNER}/issues" "state=${state}&sort=created&direction=desc" \
+                | python3 -c "
+import sys,json
+issues=json.load(sys.stdin)
+if isinstance(issues,dict) and 'message' in issues:
+    print(f'Error: {issues[\"message\"]}'); sys.exit(1)
+for i in issues:
+    labels=','.join([l['name'] for l in i.get('labels',[])])
+    print(f'#{i[\"number\"]:>6}  [{i[\"state\"]}] {i[\"title\"][:80]}')
+    if labels: print(f'         🏷 {labels}')
+" 2>/dev/null || echo "Failed to list issues"
+            ;;
+
+        create|new)
+            local title="${2:-}"
+            local body="${3:-}"
+            local labels="${4:-}"
+            if [[ -z "$title" ]]; then
+                echo "Usage: gitee issue create \"标题\" \"正文\" [\"标签1,标签2\"]"
+                return 1
+            fi
+            local data="\"repo\":\"${GITEE_REPO}\",\"title\":\"${title}\""
+            [[ -n "$body" ]] && data="$data,\"body\":\"${body}\""
+            [[ -n "$labels" ]] && data="$data,\"labels\":\"${labels}\""
+            _gitee_post "/repos/${GITEE_OWNER}/issues" "$data" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Created #{d[\"number\"]}: {d[\"title\"]}\n   {d[\"html_url\"]}')" 2>/dev/null
+            ;;
+
+        view|get)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee issue view <number>"; return 1; }
+            _gitee_get "/repos/${GITEE_OWNER}/issues/${num}" \
+                | python3 -c "
+import sys,json
+i=json.load(sys.stdin)
+print(f'#{i[\"number\"]}  [{i[\"state\"]}]  {i[\"title\"]}')
+print(f'Author: {i[\"user\"][\"login\"]}  |  Created: {i[\"created_at\"]}  |  Updated: {i[\"updated_at\"]}')
+print(f'URL: {i[\"html_url\"]}')
+print()
+print(i.get('body','(no body)'))
+labels=','.join([l['name'] for l in i.get('labels',[])])
+if labels: print(f'\n🏷 {labels}')
+" 2>/dev/null
+            ;;
+
+        close)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee issue close <number>"; return 1; }
+            _gitee_patch "/repos/${GITEE_OWNER}/issues/${num}" "\"state\":\"closed\"" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Closed #{d[\"number\"]}')" 2>/dev/null
+            ;;
+
+        reopen)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee issue reopen <number>"; return 1; }
+            _gitee_patch "/repos/${GITEE_OWNER}/issues/${num}" "\"state\":\"open\"" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Reopened #{d[\"number\"]}')" 2>/dev/null
+            ;;
+
+        comment)
+            local num="${2:-}"
+            local body="${3:-}"
+            [[ -z "$num" || -z "$body" ]] && { echo "Usage: gitee issue comment <number> \"评论内容\""; return 1; }
+            _gitee_post "/repos/${GITEE_OWNER}/issues/${num}/comments" "\"body\":\"${body}\"" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Comment added to #{num}')" 2>/dev/null
+            ;;
+
+        *)
+            echo "Usage: gitee issue {list|create|view|close|reopen|comment} [args...]"
+            ;;
+    esac
+}
+
+# ─── PR Commands ──────────────────────────────────────────
+gitee_pr() {
+    _check_token || return 1
+    _gitee_context
+
+    local cmd="${1:-list}"
+    case "$cmd" in
+        list|ls)
+            local state="${2:-open}"
+            _gitee_get "/repos/${GITEE_OWNER}/pulls" "state=${state}&sort=created&direction=desc" \
+                | python3 -c "
+import sys,json
+prs=json.load(sys.stdin)
+for p in prs:
+    print(f'#{p[\"number\"]:>6}  [{p[\"state\"]}] {p[\"title\"][:80]}')
+    print(f'         {p[\"head\"][\"ref\"]} → {p[\"base\"][\"ref\"]}  by {p[\"user\"][\"login\"]}')
+" 2>/dev/null || echo "Failed to list PRs"
+            ;;
+
+        create|new)
+            local title="${2:-}"
+            local body="${3:-}"
+            local head=""
+            local base="main"
+            shift 2 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --head) head="$2"; shift 2 ;;
+                    --base) base="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$title" || -z "$head" ]] && {
+                echo "Usage: gitee pr create \"标题\" \"正文\" --head <branch> [--base <branch>]"
+                return 1
+            }
+            local data="\"repo\":\"${GITEE_REPO}\",\"title\":\"${title}\",\"head\":\"${head}\",\"base\":\"${base}\""
+            [[ -n "$body" ]] && data="$data,\"body\":\"${body}\""
+            _gitee_post "/repos/${GITEE_OWNER}/pulls" "$data" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Created PR #{d[\"number\"]}: {d[\"title\"]}\n   {d[\"html_url\"]}')" 2>/dev/null
+            ;;
+
+        view|get)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee pr view <number>"; return 1; }
+            _gitee_get "/repos/${GITEE_OWNER}/pulls/${num}" \
+                | python3 -c "
+import sys,json
+p=json.load(sys.stdin)
+print(f'PR #{p[\"number\"]}  [{p[\"state\"]}]  {p[\"title\"]}')
+print(f'Author: {p[\"user\"][\"login\"]}  |  {p[\"head\"][\"ref\"]} → {p[\"base\"][\"ref\"]}')
+print(f'Created: {p[\"created_at\"]}  |  Updated: {p[\"updated_at\"]}')
+print(f'Mergeable: {p.get(\"mergeable\",\"?\")}  |  Merged: {p.get(\"merged\",\"?\")}')
+print(f'URL: {p[\"html_url\"]}')
+print()
+print(p.get('body','(no body)'))
+" 2>/dev/null
+            ;;
+
+        merge)
+            local num="${2:-}"
+            [[ -z "$num" ]] && { echo "Usage: gitee pr merge <number>"; return 1; }
+            _gitee_post "/repos/${GITEE_OWNER}/pulls/${num}/merge" "" \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Merged PR #{num}')" 2>/dev/null
+            ;;
+
+        *)
+            echo "Usage: gitee pr {list|create|view|merge} [args...]"
+            ;;
+    esac
+}
+
+# ─── Repo Commands ────────────────────────────────────────
+gitee_repo() {
+    _check_token || return 1
+    _gitee_context
+    _gitee_get "/repos/${GITEE_OWNER}/${GITEE_REPO}" \
+        | python3 -c "
+import sys,json
+r=json.load(sys.stdin)
+print(f'Repo: {r[\"full_name\"]}')
+print(f'Description: {r.get(\"description\",\"(none)\")}')
+print(f'Default branch: {r[\"default_branch\"]}')
+print(f'Private: {r[\"private\"]}  |  Forks: {r[\"forks_count\"]}  |  Stars: {r[\"stargazers_count\"]}')
+print(f'Open Issues: {r[\"open_issues_count\"]}  |  License: {r.get(\"license\",\"none\")}')
+print(f'Created: {r[\"created_at\"]}  |  Updated: {r[\"updated_at\"]}')
+print(f'URL: {r[\"html_url\"]}')
+" 2>/dev/null
+}
+
+# ─── Labels ───────────────────────────────────────────────
+gitee_labels() {
+    _check_token || return 1
+    _gitee_context
+    _gitee_get "/repos/${GITEE_OWNER}/${GITEE_REPO}/labels" \
+        | python3 -c "
+import sys,json
+labels=json.load(sys.stdin)
+for l in labels:
+    print(f'{l[\"name\"]:20} #{l[\"color\"]}')
+" 2>/dev/null
+}
+
+# ─── Whoami ───────────────────────────────────────────────
+gitee_whoami() {
+    _check_token || return 1
+    _gitee_get "/user" \
+        | python3 -c "import sys,json; u=json.load(sys.stdin); print(f'{u[\"login\"]} ({u[\"name\"]})\n{u[\"html_url\"]}')" 2>/dev/null
+}
+
+# ─── Assign ───────────────────────────────────────────────
+gitee_assign() {
+    _check_token || return 1
+    _gitee_context
+    local num="${1:-}"
+    local user="${2:-}"
+    [[ -z "$num" || -z "$user" ]] && { echo "Usage: gitee assign <issue-number> <username>"; return 1; }
+    _gitee_patch "/repos/${GITEE_OWNER}/issues/${num}" "\"assignee\":\"${user}\"" \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Assigned #{d[\"number\"]} to ${user}')" 2>/dev/null
+}
+
+# ─── Main Dispatch ────────────────────────────────────────
+gitee() {
+    local cmd="${1:-}"
+    case "$cmd" in
+        issue|issues)  shift; gitee_issue "$@" ;;
+        pr|pull)       shift; gitee_pr "$@" ;;
+        repo)          shift; gitee_repo "$@" ;;
+        labels)        shift; gitee_labels "$@" ;;
+        whoami|who)    shift; gitee_whoami "$@" ;;
+        assign)        shift; gitee_assign "$@" ;;
+        help|--help|-h)
+            echo "gitee — Gitee API CLI"
+            echo ""
+            echo "Commands:"
+            echo "  gitee issue list [state]        List issues"
+            echo "  gitee issue create <title> <body> [labels]"
+            echo "  gitee issue view <number>       View issue"
+            echo "  gitee issue close <number>      Close issue"
+            echo "  gitee issue reopen <number>     Reopen issue"
+            echo "  gitee issue comment <n> <body>  Add comment"
+            echo "  gitee pr list [state]           List PRs"
+            echo "  gitee pr create <title> <body> --head <branch>"
+            echo "  gitee pr view <number>          View PR"
+            echo "  gitee pr merge <number>         Merge PR"
+            echo "  gitee repo                      Show repo info"
+            echo "  gitee labels                    List labels"
+            echo "  gitee assign <issue> <username> Assign issue"
+            echo "  gitee whoami                    Show current user"
+            echo ""
+            echo "Setup: export GITEE_TOKEN='your-token'"
+            ;;
+        *)
+            echo "Unknown command: $cmd"
+            echo "Run 'gitee help' for usage."
+            ;;
+    esac
+}
+
+# If sourced, define functions only; if executed, run command
+if (return 0 2>/dev/null); then
+    # Sourced — define gitee function
+    :
+else
+    # Executed directly
+    gitee "$@"
+fi
