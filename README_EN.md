@@ -99,6 +99,10 @@ gitee repo                            # Show repo info
 gitee repo create <name>              # Create repo [--description] [--private]
 gitee repo delete                     # Delete repo
 gitee repo fork                       # Fork repo
+gitee repo star                       # Star repo
+gitee repo unstar                     # Unstar repo
+gitee repo watch                      # Watch repo
+gitee repo unwatch                    # Unwatch repo
 gitee whoami                          # Show current user
 gitee assign <issue-number> <username>   # Assign issue
 ```

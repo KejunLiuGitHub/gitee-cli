@@ -67,7 +67,7 @@ _gitee_http() {
                 --connect-timeout 10 --max-time 30 \
                 "$url" 2>/dev/null) || true
             ;;
-        POST|PATCH|DELETE)
+        POST|PATCH|PUT|DELETE)
             http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
                 -X "$method" \
                 -H "Content-Type: application/json;charset=UTF-8" \
@@ -344,7 +344,32 @@ print(f'URL: {r[\"html_url\"]}')
             _gitee_http POST "/repos/${GITEE_OWNER}/${GITEE_REPO}/forks" "{}" \
                 | python3 -c "import sys,json; r=json.load(sys.stdin); print(f'✅ Forked to: {r[\"full_name\"]}\n   {r[\"html_url\"]}')" 2>/dev/null
             ;;
-        *) echo "Usage: gitee repo {info|create|delete|fork} [args...]" ;;
+        star)
+            _gitee_context || return 1
+            if _gitee_http PUT "/user/starred/${GITEE_OWNER}/${GITEE_REPO}" "{}" > /dev/null 2>&1; then
+                echo "⭐ Starred: ${GITEE_OWNER}/${GITEE_REPO}"
+            fi
+            ;;
+        unstar)
+            _gitee_context || return 1
+            if _gitee_http DELETE "/user/starred/${GITEE_OWNER}/${GITEE_REPO}" "" > /dev/null 2>&1; then
+                echo "⭐ Unstarred: ${GITEE_OWNER}/${GITEE_REPO}"
+            fi
+            ;;
+        watch)
+            _gitee_context || return 1
+            if _gitee_http PUT "/user/subscriptions/${GITEE_OWNER}/${GITEE_REPO}" \
+                "$(_json_build "watch_type=watching")" > /dev/null 2>&1; then
+                echo "👁 Watching: ${GITEE_OWNER}/${GITEE_REPO}"
+            fi
+            ;;
+        unwatch)
+            _gitee_context || return 1
+            if _gitee_http DELETE "/user/subscriptions/${GITEE_OWNER}/${GITEE_REPO}" "" > /dev/null 2>&1; then
+                echo "👁 Unwatched: ${GITEE_OWNER}/${GITEE_REPO}"
+            fi
+            ;;
+        *) echo "Usage: gitee repo {info|create|delete|fork|star|unstar|watch|unwatch} [args...]" ;;
     esac
 }
 
@@ -608,6 +633,10 @@ gitee() {
             echo "         [--description] [--private]"
             echo "  gitee repo delete                     Delete repository"
             echo "  gitee repo fork                       Fork repository"
+            echo "  gitee repo star                       Star repository"
+            echo "  gitee repo unstar                     Unstar repository"
+            echo "  gitee repo watch                      Watch repository"
+            echo "  gitee repo unwatch                    Unwatch repository"
             echo "  gitee label list                      List labels"
             echo "  gitee label create <name> <color>     Create label"
             echo "  gitee label delete <name>             Delete label"
