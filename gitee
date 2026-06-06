@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ─── Config ──────────────────────────────────────────────────
-GITEE_CLI_VERSION="0.2.0"
+GITEE_CLI_VERSION="0.2.1"
 GITEE_API="${GITEE_API_BASE:-https://gitee.com/api/v5}"
 GITEE_TOKEN="${GITEE_TOKEN:-}"
 
