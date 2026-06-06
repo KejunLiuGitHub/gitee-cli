@@ -632,18 +632,31 @@ gitee_wiki() {
     _check_token || return 1
     _gitee_context || return 1
     local cmd="${1:-list}"
-    local wiki_url="https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.wiki.git"
+    local wiki_url="https://oauth2@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.wiki.git"
     local tmpdir
     tmpdir=$(mktemp -d /tmp/gitee.wiki.XXXXXX)
-    trap "rm -rf '$tmpdir'" EXIT INT TERM
+    # ASKPASS script hides token from process list (ps aux)
+    local askpass_sh
+    askpass_sh=$(mktemp /tmp/gitee.askpass.XXXXXX)
+    cat > "$askpass_sh" << EOF
+#!/bin/sh
+case "\$1" in
+    *Username*) echo "oauth2";;
+    *Password*) echo "${GITEE_TOKEN}";;
+esac
+EOF
+    chmod +x "$askpass_sh"
+    trap "rm -rf '$tmpdir'; rm -f '$askpass_sh'" EXIT INT TERM
+
+    local _git="GIT_ASKPASS=$askpass_sh git -c credential.helper="
 
     case "$cmd" in
         list|ls)
-            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+            if ! ${_git} clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
                 echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
                 echo "   Gitee wiki must have at least one page created via web UI before CLI access works." >&2
                 echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki → create the first page." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
@@ -660,10 +673,10 @@ gitee_wiki() {
         get|view)
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki get <slug>"; return 1; }
-            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+            if ! ${_git} clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
                 echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
                 echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
@@ -672,7 +685,7 @@ gitee_wiki() {
                 cat "$file_path"
             else
                 echo "❌ Wiki page '${slug}' not found." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
@@ -680,7 +693,7 @@ gitee_wiki() {
         create|new)
             local title="${2:-}" body="${3:-}"
             [[ -z "$title" || -z "$body" ]] && { echo "Usage: gitee wiki create \"title\" \"body\""; return 1; }
-            git clone -q "$wiki_url" "$tmpdir" 2>/dev/null || {
+            ${_git} clone -q "$wiki_url" "$tmpdir" 2>/dev/null || {
                 # Wiki repo may not exist yet; initialise it
                 git init -q "$tmpdir"
                 cd "$tmpdir"
@@ -697,12 +710,12 @@ gitee_wiki() {
                 commit -q -m "Update wiki page: ${title}" >/dev/null 2>&1 || {
                 # Nothing to commit (file unchanged)
                 cd - >/dev/null
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 echo "✅ Wiki page '${title}' is up to date."
                 return 0
             }
-            if git push -q origin master 2>/dev/null; then
+            if ${_git} push -q origin master 2>/dev/null; then
                 cd - >/dev/null
                 echo "✅ Wiki page '${title}' created/updated."
             else
@@ -710,7 +723,7 @@ gitee_wiki() {
                 echo "❌ Failed to push wiki page." >&2
                 echo "   If this is the first wiki page, create it via web UI first:" >&2
                 echo "   https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki" >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
@@ -718,17 +731,17 @@ gitee_wiki() {
         delete|rm)
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki delete <slug>"; return 1; }
-            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+            if ! ${_git} clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
                 echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
                 echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
             local file_path="$tmpdir/${slug}.md"
             if [[ ! -f "$file_path" ]]; then
                 echo "❌ Wiki page '${slug}' not found." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
@@ -736,20 +749,20 @@ gitee_wiki() {
             git rm -q "${slug}.md" 2>/dev/null || true
             git -c user.email="gitee-cli@local" -c user.name="gitee-cli" \
                 commit -q -m "Delete wiki page: ${slug}" >/dev/null 2>&1 || true
-            if git push -q origin master 2>/dev/null; then
+            if ${_git} push -q origin master 2>/dev/null; then
                 cd - >/dev/null
                 echo "✅ Wiki page '${slug}' deleted."
             else
                 cd - >/dev/null
                 echo "❌ Failed to push wiki delete." >&2
-                rm -rf "$tmpdir"
+                rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
             fi
             ;;
         *) echo "Usage: gitee wiki {list|get|create|delete} [args...]" ;;
     esac
-    rm -rf "$tmpdir"
+    rm -rf "$tmpdir"; rm -f "$askpass_sh"
     trap - EXIT INT TERM
 }
 
