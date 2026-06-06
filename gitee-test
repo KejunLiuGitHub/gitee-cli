@@ -252,6 +252,14 @@ run_test "Syntax: gitee-test script parses" \
     "bash -n $0" \
     1
 
+run_test "CLI: version command" \
+    "$GITEE_BIN version" \
+    1
+
+run_test "CLI: help command" \
+    "$GITEE_BIN help" \
+    1
+
 if _cmd_exists shellcheck; then
     run_test "Lint: shellcheck gitee" \
         "shellcheck $GITEE_BIN" \

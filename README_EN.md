@@ -106,6 +106,7 @@ gitee assign <issue-number> <username>   # Assign issue
 gitee search <keyword> [limit]          # Search repositories (default 10, max 50)
 gitee user <username>                   # Show user profile
 gitee trending [limit]                  # Trending repositories (default 20, max 50)
+gitee version                           # Show version
 ```
 
 ## Testing & Diagnostics

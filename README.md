@@ -106,6 +106,7 @@ gitee assign <issue编号> <用户名>   # 指派 Issue
 gitee search <关键词> [数量]          # 搜索仓库（默认 10 条，最多 50）
 gitee user <用户名>                   # 查看用户资料
 gitee trending [数量]                 # 热门仓库推荐（默认 20 条，最多 50）
+gitee version                         # 显示版本号
 ```
 
 ## 测试与诊断

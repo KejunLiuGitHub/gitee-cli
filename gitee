@@ -5,6 +5,7 @@
 set -euo pipefail
 
 # ─── Config ──────────────────────────────────────────────────
+GITEE_CLI_VERSION="0.2.0"
 GITEE_API="${GITEE_API_BASE:-https://gitee.com/api/v5}"
 GITEE_TOKEN="${GITEE_TOKEN:-}"
 
@@ -551,6 +552,7 @@ gitee() {
         trending)        shift; gitee_trending "$@" ;;
         help|--help|-h)
             echo "gitee — Gitee API v5 CLI (like gh for GitHub)"
+            echo "Version: ${GITEE_CLI_VERSION}"
             echo ""
             echo "Commands:"
             echo "  gitee issue list [state]              List issues"
@@ -579,10 +581,14 @@ gitee() {
             echo "  gitee search <keyword> [limit]        Search repositories"
             echo "  gitee user <username>                 Show user profile"
             echo "  gitee trending [limit]                Trending repositories"
+            echo "  gitee version                         Show version"
             echo ""
             echo "Auth: token via Authorization header (never in URL/body)"
             echo "Setup: export GITEE_TOKEN='your-token'"
             echo "Home:  https://gitee.com/sculkj/gitee-cli"
+            ;;
+        version|--version|-v)
+            echo "gitee-cli ${GITEE_CLI_VERSION}"
             ;;
         *) echo "Unknown command: $cmd"; echo "Run 'gitee help' for usage." ;;
     esac
