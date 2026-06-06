@@ -68,12 +68,14 @@ _gitee_http() {
                 "$url" 2>/dev/null) || true
             ;;
         POST|PATCH|PUT|DELETE)
+            local curl_args=()
+            [[ -n "${json_body:-}" ]] && curl_args+=("-d" "$json_body")
             http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
                 -X "$method" \
                 -H "Content-Type: application/json;charset=UTF-8" \
                 -H "Authorization: token ${GITEE_TOKEN}" \
                 --connect-timeout 10 --max-time 30 \
-                ${json_body:+-d "$json_body"} \
+                "${curl_args[@]}" \
                 "${GITEE_API}${endpoint}" 2>/dev/null) || true
             ;;
     esac
