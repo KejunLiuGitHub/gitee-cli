@@ -730,6 +730,119 @@ gitee_wiki() {
     trap - EXIT INT TERM
 }
 
+# ─── Release ─────────────────────────────────────────────────
+gitee_release() {
+    _check_token || return 1
+    _gitee_context || return 1
+    local cmd="${1:-list}"
+    case "$cmd" in
+        list|ls)
+            _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" "" \
+                | python3 -c "
+import sys,json
+rels=json.load(sys.stdin)
+if not isinstance(rels,list):
+    print('Error:', rels.get('message','unknown')); sys.exit(1)
+if not rels:
+    print('No releases found.')
+    sys.exit(0)
+for r in rels:
+    draft='[draft]' if r.get('draft') else ''
+    pre='[pre]' if r.get('prerelease') else ''
+    print(f'{r[\"tag_name\"]:20} {draft} {pre}')
+    print(f'  {r.get(\"name\",\"\")}')
+    print(f'  {r.get(\"html_url\", \"-\")}')
+    print()
+" 2>/dev/null
+            ;;
+        view|get)
+            local tag="${2:-}"
+            [[ -z "$tag" ]] && { echo "Usage: gitee release view <tag>"; return 1; }
+            _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${tag}" "" \
+                | python3 -c "
+import sys,json
+r=json.load(sys.stdin)
+if isinstance(r,dict) and 'message' in r:
+    print(f'Error: {r[\"message\"]}'); sys.exit(1)
+print(f'Tag: {r[\"tag_name\"]}')
+print(f'Name: {r.get(\"name\",\"\")}')
+print(f'Author: {r[\"author\"][\"login\"]}')
+print(f'Created: {r[\"created_at\"]}')
+print(f'URL: {r.get(\"html_url\", \"-\")}')
+print()
+print(r.get('body','(no body)'))
+assets=r.get('assets',[])
+if assets:
+    print(f'\nAssets ({len(assets)}):')
+    for a in assets:
+        print(f'  - {a.get(\"name\",\"\")} ({a.get(\"size\",0)} bytes)')
+        print(f'    {a.get(\"browser_download_url\",\"\")}')
+" 2>/dev/null
+            ;;
+        create|new)
+            local tag="${2:-}" title="" body=""
+            shift 2 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --title|-t) title="$2"; shift 2 ;;
+                    --body|-b) body="$2"; shift 2 ;;
+                    *) [[ -z "$title" ]] && title="$1" || body="$1"; shift ;;
+                esac
+            done
+            [[ -z "$tag" ]] && { echo "Usage: gitee release create <tag> [--title \"name\"] [--body \"notes\"]"; return 1; }
+            [[ -z "$title" ]] && title="${tag}"
+            _gitee_http POST "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases" \
+                "$(_json_build "tag_name=${tag}" "name=${title}" "target_commitish=main" ${body:+"body=${body}"})" \
+                | python3 -c "import sys,json; r=json.load(sys.stdin); print(f'✅ Release created: {r[\"tag_name\"]}\n   {r.get(\"html_url\", \"-\")}')" 2>/dev/null
+            ;;
+        delete|rm)
+            local tag="${2:-}"
+            [[ -z "$tag" ]] && { echo "Usage: gitee release delete <tag>"; return 1; }
+            # Need release id to delete; lookup by tag first
+            local rel_json release_id
+            rel_json=$(_gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${tag}" "" 2>/dev/null) || { echo "❌ Release '${tag}' not found." >&2; return 1; }
+            release_id=$(echo "$rel_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+            [[ -z "$release_id" ]] && { echo "❌ Cannot find release id for '${tag}'." >&2; return 1; }
+            _gitee_http DELETE "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${release_id}" "" \
+                | python3 -c "print('✅ Release ${tag} deleted.')" 2>/dev/null
+            ;;
+        upload)
+            local tag="${2:-}" filepath="${3:-}"
+            [[ -z "$tag" || -z "$filepath" ]] && { echo "Usage: gitee release upload <tag> <file-path>"; return 1; }
+            [[ -f "$filepath" ]] || { echo "❌ File not found: ${filepath}" >&2; return 1; }
+            # Lookup release id by tag
+            local rel_json release_id
+            rel_json=$(_gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${tag}" "" 2>/dev/null) || { echo "❌ Release '${tag}' not found." >&2; return 1; }
+            release_id=$(echo "$rel_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+            [[ -z "$release_id" ]] && { echo "❌ Cannot find release id for '${tag}'." >&2; return 1; }
+            local tmpfile
+            tmpfile=$(mktemp /tmp/gitee.XXXXXX)
+            trap "rm -f '$tmpfile'" EXIT INT TERM
+            local http_code
+            http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
+                -X POST \
+                -H "Authorization: token ${GITEE_TOKEN}" \
+                -F "file=@${filepath}" \
+                --connect-timeout 10 --max-time 120 \
+                "${GITEE_API}/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${release_id}/attach_files" 2>/dev/null) || true
+            if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+                python3 -c "import sys,json; a=json.load(open(sys.argv[1])); print(f'✅ Uploaded: {a[\"name\"]} ({a[\"size\"]} bytes)\n   {a[\"browser_download_url\"]}')" "$tmpfile" 2>/dev/null
+                rm -f "$tmpfile"
+                trap - EXIT INT TERM
+                return 0
+            fi
+            local err=""
+            err=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("message",d.get("error_description","")))' "$tmpfile" 2>/dev/null)
+            [[ -z "$err" ]] && err="HTTP $http_code"
+            echo "❌ Upload failed: ${err}" >&2
+            rm -f "$tmpfile"
+            trap - EXIT INT TERM
+            return 1
+            ;;
+        *) echo "Usage: gitee release {list|view|create|delete|upload} [args...]" ;;
+    esac
+}
+
 # ─── Main Dispatch ───────────────────────────────────────────
 gitee() {
     local cmd="${1:-}"
@@ -744,6 +857,7 @@ gitee() {
         user)            shift; gitee_user "$@" ;;
         trending)        shift; gitee_trending "$@" ;;
         wiki)             shift; gitee_wiki "$@" ;;
+        release)          shift; gitee_release "$@" ;;
         help|--help|-h)
             echo "gitee — Gitee API v5 CLI (like gh for GitHub)"
             echo "Version: ${GITEE_CLI_VERSION}"
@@ -787,6 +901,12 @@ gitee() {
             echo "  gitee wiki get <slug>                 View wiki page"
             echo "  gitee wiki create \"title\" \"body\"    Create/update wiki page"
             echo "  gitee wiki delete <slug>              Delete wiki page"
+            echo "  gitee release list                    List releases"
+            echo "  gitee release view <tag>              View release"
+            echo "  gitee release create <tag>            Create release"
+            echo "         [--title \"name\"] [--body \"notes\"]"
+            echo "  gitee release delete <tag>            Delete release"
+            echo "  gitee release upload <tag> <file>     Upload release asset"
             echo "  gitee version                         Show version"
             echo ""
             echo "Auth: token via Authorization header (never in URL/body)"

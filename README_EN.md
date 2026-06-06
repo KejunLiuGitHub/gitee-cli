@@ -112,6 +112,16 @@ gitee whoami                          # Show current user
 gitee assign <issue-number> <username>   # Assign issue
 ```
 
+### Release
+
+```bash
+gitee release list                    # List releases
+gitee release view <tag>              # View release details
+gitee release create <tag> [name]     # Create release [--title] [--body]
+gitee release delete <tag>            # Delete release
+gitee release upload <tag> <file>     # Upload asset to release
+```
+
 ### Search & Discovery (public, no token required)
 
 ```bash

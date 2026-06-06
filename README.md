@@ -112,6 +112,16 @@ gitee whoami                          # 查看当前登录用户
 gitee assign <issue编号> <用户名>     # 指派 Issue
 ```
 
+### Release
+
+```bash
+gitee release list                    # 列出 Release
+gitee release view <tag>              # 查看 Release 详情
+gitee release create <tag> [名称]      # 创建 Release [--title] [--body]
+gitee release delete <tag>            # 删除 Release
+gitee release upload <tag> <文件>     # 上传附件到 Release
+```
+
 ### 搜索与发现（公开内容，无需 token）
 
 ```bash
