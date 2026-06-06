@@ -638,7 +638,9 @@ gitee_wiki() {
     case "$cmd" in
         list|ls)
             if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO} (or not enabled)." >&2
+                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   Gitee wiki must have at least one page created via web UI before CLI access works." >&2
+                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki → create the first page." >&2
                 rm -rf "$tmpdir"
                 trap - EXIT INT TERM
                 return 1
@@ -657,7 +659,8 @@ gitee_wiki() {
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki get <slug>"; return 1; }
             if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
                 rm -rf "$tmpdir"
                 trap - EXIT INT TERM
                 return 1
@@ -703,6 +706,8 @@ gitee_wiki() {
             else
                 cd - >/dev/null
                 echo "❌ Failed to push wiki page." >&2
+                echo "   If this is the first wiki page, create it via web UI first:" >&2
+                echo "   https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki" >&2
                 rm -rf "$tmpdir"
                 trap - EXIT INT TERM
                 return 1
@@ -712,7 +717,8 @@ gitee_wiki() {
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki delete <slug>"; return 1; }
             if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
                 rm -rf "$tmpdir"
                 trap - EXIT INT TERM
                 return 1
