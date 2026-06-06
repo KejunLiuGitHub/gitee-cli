@@ -302,9 +302,12 @@ print(p.get('body','(no body)'))
 # ─── Repo ────────────────────────────────────────────────────
 gitee_repo() {
     _check_token || return 1
-    _gitee_context || return 1
-    _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}" "" \
-        | python3 -c "
+    local cmd="${1:-info}"
+    case "$cmd" in
+        info|view|"")
+            _gitee_context || return 1
+            _gitee_http GET "/repos/${GITEE_OWNER}/${GITEE_REPO}" "" \
+                | python3 -c "
 import sys,json
 r=json.load(sys.stdin)
 print(f'Repo: {r[\"full_name\"]}')
@@ -315,6 +318,34 @@ print(f'Open Issues: {r[\"open_issues_count\"]}  |  License: {r.get(\"license\",
 print(f'Created: {r[\"created_at\"]}  |  Updated: {r[\"updated_at\"]}')
 print(f'URL: {r[\"html_url\"]}')
 " 2>/dev/null
+            ;;
+        create|new)
+            local name="${2:-}" description="" private="false"
+            shift 2 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --description|-d) description="$2"; shift 2 ;;
+                    --private|-p) private="true"; shift ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$name" ]] && { echo "Usage: gitee repo create <name> [--description \"desc\"] [--private]"; return 1; }
+            _gitee_http POST "/user/repos" \
+                "$(_json_build "name=${name}" ${description:+"description=${description}"} "private=${private}")" \
+                | python3 -c "import sys,json; r=json.load(sys.stdin); print(f'✅ Created repo: {r[\"full_name\"]}\n   {r[\"html_url\"]}')" 2>/dev/null
+            ;;
+        delete|rm)
+            _gitee_context || return 1
+            _gitee_http DELETE "/repos/${GITEE_OWNER}/${GITEE_REPO}" "" \
+                | python3 -c "print('✅ Repo deleted: ${GITEE_OWNER}/${GITEE_REPO}')" 2>/dev/null
+            ;;
+        fork)
+            _gitee_context || return 1
+            _gitee_http POST "/repos/${GITEE_OWNER}/${GITEE_REPO}/forks" "{}" \
+                | python3 -c "import sys,json; r=json.load(sys.stdin); print(f'✅ Forked to: {r[\"full_name\"]}\n   {r[\"html_url\"]}')" 2>/dev/null
+            ;;
+        *) echo "Usage: gitee repo {info|create|delete|fork} [args...]" ;;
+    esac
 }
 
 # ─── Labels ──────────────────────────────────────────────────
@@ -573,6 +604,10 @@ gitee() {
             echo "         [--title] [--body]"
             echo "  gitee pr checkout <number>            Checkout PR branch"
             echo "  gitee repo                            Show repo info"
+            echo "  gitee repo create <name>              Create repository"
+            echo "         [--description] [--private]"
+            echo "  gitee repo delete                     Delete repository"
+            echo "  gitee repo fork                       Fork repository"
             echo "  gitee label list                      List labels"
             echo "  gitee label create <name> <color>     Create label"
             echo "  gitee label delete <name>             Delete label"

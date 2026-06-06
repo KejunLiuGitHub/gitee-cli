@@ -95,8 +95,11 @@ gitee label delete <name>             # Delete label
 ### Repository
 
 ```bash
-gitee repo          # Show repo info
-gitee whoami        # Show current user
+gitee repo                            # Show repo info
+gitee repo create <name>              # Create repo [--description] [--private]
+gitee repo delete                     # Delete repo
+gitee repo fork                       # Fork repo
+gitee whoami                          # Show current user
 gitee assign <issue-number> <username>   # Assign issue
 ```
 

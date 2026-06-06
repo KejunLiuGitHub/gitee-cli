@@ -95,9 +95,12 @@ gitee label delete <名称>             # 删除标签
 ### 仓库
 
 ```bash
-gitee repo          # 查看仓库信息
-gitee whoami        # 查看当前登录用户
-gitee assign <issue编号> <用户名>   # 指派 Issue
+gitee repo                            # 查看仓库信息
+gitee repo create <名称>              # 创建仓库 [--description] [--private]
+gitee repo delete                     # 删除仓库
+gitee repo fork                       # Fork 仓库
+gitee whoami                          # 查看当前登录用户
+gitee assign <issue编号> <用户名>     # 指派 Issue
 ```
 
 ### 搜索与发现（公开内容，无需 token）
