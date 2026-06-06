@@ -653,9 +653,9 @@ EOF
     case "$cmd" in
         list|ls)
             if ! _git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
-                echo "   Gitee wiki must have at least one page created via web UI before CLI access works." >&2
-                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki → create the first page." >&2
+                echo "❌ Cannot access wiki for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   If wiki is not enabled: visit https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to enable it." >&2
+                echo "   If this is the first page: try 'gitee wiki create \"Home\" \"content\"' to initialise." >&2
                 rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
@@ -674,8 +674,9 @@ EOF
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki get <slug>"; return 1; }
             if ! _git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
-                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
+                echo "❌ Cannot access wiki for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   If wiki is not enabled: visit https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to enable it." >&2
+                echo "   If this is the first page: try 'gitee wiki create \"Home\" \"content\"' to initialise." >&2
                 rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
@@ -732,8 +733,9 @@ EOF
             local slug="${2:-}"
             [[ -z "$slug" ]] && { echo "Usage: gitee wiki delete <slug>"; return 1; }
             if ! _git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
-                echo "❌ Wiki not initialized for ${GITEE_OWNER}/${GITEE_REPO}." >&2
-                echo "   Visit: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to create the first page." >&2
+                echo "❌ Cannot access wiki for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                echo "   If wiki is not enabled: visit https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/wiki to enable it." >&2
+                echo "   If this is the first page: try 'gitee wiki create \"Home\" \"content\"' to initialise." >&2
                 rm -rf "$tmpdir"; rm -f "$askpass_sh"
                 trap - EXIT INT TERM
                 return 1
