@@ -103,6 +103,11 @@ gitee repo star                       # Star repo
 gitee repo unstar                     # Unstar repo
 gitee repo watch                      # Watch repo
 gitee repo unwatch                    # Unwatch repo
+gitee repo list [page] [per_page]     # List authorized repos
+gitee wiki list                       # List wiki pages (enable wiki in web settings first)
+gitee wiki get <slug>                 # View wiki page
+gitee wiki create "title" "body"       # Create/update wiki page
+gitee wiki delete <slug>              # Delete wiki page
 gitee whoami                          # Show current user
 gitee assign <issue-number> <username>   # Assign issue
 ```

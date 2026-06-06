@@ -103,6 +103,11 @@ gitee repo star                       # Star 仓库
 gitee repo unstar                     # Unstar 仓库
 gitee repo watch                      # Watch 仓库
 gitee repo unwatch                    # Unwatch 仓库
+gitee repo list [page] [per_page]     # 列出授权仓库
+gitee wiki list                       # 列出 Wiki 页面（需先在网页启用 Wiki）
+gitee wiki get <slug>                 # 查看 Wiki 页面
+gitee wiki create "标题" "正文"        # 创建/更新 Wiki 页面
+gitee wiki delete <slug>              # 删除 Wiki 页面
 gitee whoami                          # 查看当前登录用户
 gitee assign <issue编号> <用户名>     # 指派 Issue
 ```

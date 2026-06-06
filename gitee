@@ -369,7 +369,21 @@ print(f'URL: {r[\"html_url\"]}')
                 echo "👁 Unwatched: ${GITEE_OWNER}/${GITEE_REPO}"
             fi
             ;;
-        *) echo "Usage: gitee repo {info|create|delete|fork|star|unstar|watch|unwatch} [args...]" ;;
+        list|ls)
+            local page="${2:-1}" per_page="${3:-20}"
+            _gitee_http GET "/user/repos" "" \
+                "type=all&sort=updated&direction=desc&page=${page}&per_page=${per_page}" \
+                | python3 -c "
+import sys,json
+repos=json.load(sys.stdin)
+if not isinstance(repos,list):
+    print('Error:', repos.get('message','unknown')); sys.exit(1)
+for r in repos:
+    private='🔒' if r['private'] else '🌐'
+    print(f'{private} {r[\"full_name\"]:40} ⭐{r[\"stargazers_count\"]:>4}  {r.get(\"description\",\"\")[:50]}')
+" 2>/dev/null
+            ;;
+        *) echo "Usage: gitee repo {info|list|create|delete|fork|star|unstar|watch|unwatch} [args...]" ;;
     esac
 }
 
@@ -593,6 +607,129 @@ for r in rows:
     return 1
 }
 
+# ─── Wiki ────────────────────────────────────────────────────
+# Gitee Wiki has no REST API; pages are stored in a separate Git repo:
+#   https://gitee.com/{owner}/{repo}.wiki.git
+# Each page is a .md file. We operate directly on that Git repo.
+gitee_wiki() {
+    _check_token || return 1
+    _gitee_context || return 1
+    local cmd="${1:-list}"
+    local wiki_url="https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${GITEE_REPO}.wiki.git"
+    local tmpdir
+    tmpdir=$(mktemp -d /tmp/gitee.wiki.XXXXXX)
+    trap "rm -rf '$tmpdir'" EXIT INT TERM
+
+    case "$cmd" in
+        list|ls)
+            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO} (or not enabled)." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            local found=0
+            for f in "$tmpdir"/*.md; do
+                [[ -f "$f" ]] || continue
+                found=1
+                local name
+                name=$(basename "$f" .md)
+                echo "  $name"
+            done
+            [[ "$found" -eq 0 ]] && echo "  (no wiki pages)"
+            ;;
+        get|view)
+            local slug="${2:-}"
+            [[ -z "$slug" ]] && { echo "Usage: gitee wiki get <slug>"; return 1; }
+            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            local file_path="$tmpdir/${slug}.md"
+            if [[ -f "$file_path" ]]; then
+                cat "$file_path"
+            else
+                echo "❌ Wiki page '${slug}' not found." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            ;;
+        create|new)
+            local title="${2:-}" body="${3:-}"
+            [[ -z "$title" || -z "$body" ]] && { echo "Usage: gitee wiki create \"title\" \"body\""; return 1; }
+            git clone -q "$wiki_url" "$tmpdir" 2>/dev/null || {
+                # Wiki repo may not exist yet; initialise it
+                git init -q "$tmpdir"
+                cd "$tmpdir"
+                git remote add origin "$wiki_url"
+                git config user.email "gitee-cli@local"
+                git config user.name "gitee-cli"
+                cd - >/dev/null
+            }
+            local file_path="$tmpdir/${title}.md"
+            printf '%s\n' "$body" > "$file_path"
+            cd "$tmpdir"
+            git add "${title}.md" >/dev/null 2>&1 || true
+            git -c user.email="gitee-cli@local" -c user.name="gitee-cli" \
+                commit -q -m "Update wiki page: ${title}" >/dev/null 2>&1 || {
+                # Nothing to commit (file unchanged)
+                cd - >/dev/null
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                echo "✅ Wiki page '${title}' is up to date."
+                return 0
+            }
+            if git push -q origin master 2>/dev/null; then
+                cd - >/dev/null
+                echo "✅ Wiki page '${title}' created/updated."
+            else
+                cd - >/dev/null
+                echo "❌ Failed to push wiki page." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            ;;
+        delete|rm)
+            local slug="${2:-}"
+            [[ -z "$slug" ]] && { echo "Usage: gitee wiki delete <slug>"; return 1; }
+            if ! git clone -q "$wiki_url" "$tmpdir" 2>/dev/null; then
+                echo "❌ No wiki found for ${GITEE_OWNER}/${GITEE_REPO}." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            local file_path="$tmpdir/${slug}.md"
+            if [[ ! -f "$file_path" ]]; then
+                echo "❌ Wiki page '${slug}' not found." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            cd "$tmpdir"
+            git rm -q "${slug}.md" 2>/dev/null || true
+            git -c user.email="gitee-cli@local" -c user.name="gitee-cli" \
+                commit -q -m "Delete wiki page: ${slug}" >/dev/null 2>&1 || true
+            if git push -q origin master 2>/dev/null; then
+                cd - >/dev/null
+                echo "✅ Wiki page '${slug}' deleted."
+            else
+                cd - >/dev/null
+                echo "❌ Failed to push wiki delete." >&2
+                rm -rf "$tmpdir"
+                trap - EXIT INT TERM
+                return 1
+            fi
+            ;;
+        *) echo "Usage: gitee wiki {list|get|create|delete} [args...]" ;;
+    esac
+    rm -rf "$tmpdir"
+    trap - EXIT INT TERM
+}
+
 # ─── Main Dispatch ───────────────────────────────────────────
 gitee() {
     local cmd="${1:-}"
@@ -606,6 +743,7 @@ gitee() {
         search)          shift; gitee_search "$@" ;;
         user)            shift; gitee_user "$@" ;;
         trending)        shift; gitee_trending "$@" ;;
+        wiki)             shift; gitee_wiki "$@" ;;
         help|--help|-h)
             echo "gitee — Gitee API v5 CLI (like gh for GitHub)"
             echo "Version: ${GITEE_CLI_VERSION}"
@@ -645,6 +783,10 @@ gitee() {
             echo "  gitee search <keyword> [limit]        Search repositories"
             echo "  gitee user <username>                 Show user profile"
             echo "  gitee trending [limit]                Trending repositories"
+            echo "  gitee wiki list                       List wiki pages"
+            echo "  gitee wiki get <slug>                 View wiki page"
+            echo "  gitee wiki create \"title\" \"body\"    Create/update wiki page"
+            echo "  gitee wiki delete <slug>              Delete wiki page"
             echo "  gitee version                         Show version"
             echo ""
             echo "Auth: token via Authorization header (never in URL/body)"
