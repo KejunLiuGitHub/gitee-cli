@@ -189,9 +189,15 @@ if labels: print(f'\n\U0001f3f7 {labels}')
             shift 2 2>/dev/null || true
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --title) title="$2"; shift 2 ;;
-                    --body) body="$2"; shift 2 ;;
-                    --labels|-l) labels="$2"; shift 2 ;;
+                    --title)
+                        if [[ $# -lt 2 ]]; then echo "❌ --title requires a value" >&2; return 1; fi
+                        title="$2"; shift 2 ;;
+                    --body)
+                        if [[ $# -lt 2 ]]; then echo "❌ --body requires a value" >&2; return 1; fi
+                        body="$2"; shift 2 ;;
+                    --labels|-l)
+                        if [[ $# -lt 2 ]]; then echo "❌ --labels requires a value" >&2; return 1; fi
+                        labels="$2"; shift 2 ;;
                     *) shift ;;
                 esac
             done
@@ -270,8 +276,12 @@ print(p.get('body','(no body)'))
             shift 2 2>/dev/null || true
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --title) title="$2"; shift 2 ;;
-                    --body) body="$2"; shift 2 ;;
+                    --title)
+                        if [[ $# -lt 2 ]]; then echo "❌ --title requires a value" >&2; return 1; fi
+                        title="$2"; shift 2 ;;
+                    --body)
+                        if [[ $# -lt 2 ]]; then echo "❌ --body requires a value" >&2; return 1; fi
+                        body="$2"; shift 2 ;;
                     *) shift ;;
                 esac
             done
@@ -293,7 +303,12 @@ print(p.get('body','(no body)'))
             local local_branch="${branch:-$head_ref}"
             git fetch gitee "${head_repo##*/}" 2>/dev/null || git fetch origin "${head_repo##*/}" 2>/dev/null || {
                 echo "❌ Cannot fetch PR branch. Add a gitee remote, or fetch manually."; return 1; }
-            git checkout -b "$local_branch" FETCH_HEAD 2>/dev/null || git checkout "$local_branch" 2>/dev/null
+            if git show-ref --verify --quiet "refs/heads/$local_branch" 2>/dev/null; then
+                git checkout "$local_branch" 2>/dev/null
+                git reset --hard FETCH_HEAD
+            else
+                git checkout -b "$local_branch" FETCH_HEAD 2>/dev/null
+            fi
             ;;
         *) echo "Usage: gitee pr {list|create|view|merge|close|edit|checkout} [args...]" ;;
     esac
