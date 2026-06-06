@@ -14,17 +14,27 @@ Gitee → 设置 → 私人令牌 → 生成。勾选 `projects`、`issues`、`p
 
 ### 2. 安装
 
-```bash
-# 加入 Shell 配置以永久使用：
-echo "source /path/to/gitee" >> ~/.zshrc   # 或 ~/.bashrc
-```
-
-或复制 `gitee` 到 PATH 中的任意位置并添加执行权限：
+**方式一（推荐）：加入 PATH**
 
 ```bash
+# 1) 复制到系统 PATH
 sudo cp gitee /usr/local/bin/
 sudo chmod +x /usr/local/bin/gitee
+
+# 2) 验证
+gitee help
 ```
+
+**方式二：source 到 Shell 配置**
+
+如果你不想复制到系统目录，可以 source 到当前 shell：
+
+```bash
+echo "source $(pwd)/gitee" >> ~/.zshrc   # 或 ~/.bashrc
+source ~/.zshrc                          # 立即生效
+```
+
+> ⚠️ **注意**：`source` 方式只在当前终端会话有效，新开终端需要重新 source 或写入配置文件。推荐使用方式一加入 PATH。
 
 ### 3. 认证
 
@@ -90,6 +100,14 @@ gitee whoami        # 查看当前登录用户
 gitee assign <issue编号> <用户名>   # 指派 Issue
 ```
 
+### 搜索与发现（公开内容，无需 token）
+
+```bash
+gitee search <关键词> [数量]          # 搜索仓库（默认 10 条，最多 50）
+gitee user <用户名>                   # 查看用户资料
+gitee trending [数量]                 # 热门仓库推荐（默认 20 条，最多 50）
+```
+
 ## 测试与诊断
 
 仓库附带 `./gitee-test` 诊断脚本，方便 AI Agent 或新用户快速验证环境：
@@ -119,24 +137,25 @@ gitee assign <issue编号> <用户名>   # 指派 Issue
 
 ## 环境变量
 
-| 变量 | 必填 | 默认值 |
-|------|------|--------|
-| `GITEE_TOKEN` | 是 | — |
-| `GITEE_OWNER` | 否 | 从 git remote 推断 |
-| `GITEE_REPO` | 否 | 从 git remote 推断 |
-| `GITEE_API_BASE` | 否 | `https://gitee.com/api/v5` |
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `GITEE_TOKEN` | 部分 | — | Issue/PR/Label 等操作**需要**；search/user/trending 等公开查询**不需要** |
+| `GITEE_OWNER` | 否 | 从 git remote 推断 | 目标仓库所有者 |
+| `GITEE_REPO` | 否 | 从 git remote 推断 | 目标仓库名 |
+| `GITEE_API_BASE` | 否 | `https://gitee.com/api/v5` | API 基础地址 |
 
-## 与 `gh` 对比
+## 与 `gh` / `opencli` 对比
 
-| 功能 | `gh` (GitHub) | `gitee` |
-|------|---------------|---------|
-| 认证 | `gh auth login` | `export GITEE_TOKEN=...` |
-| Issue/PR/Repo 增删改查 | 有 | 有 |
-| Actions/CI | 有 | 无 |
-| Codespaces | 有 | 无 |
-| 扩展 | 有 | 无 |
+| 功能 | `gh` (GitHub) | `opencli gitee` | `gitee-cli` |
+|------|---------------|-----------------|-------------|
+| 认证 | `gh auth login` | ❌ 不需要 | `export GITEE_TOKEN=...` |
+| Issue/PR/Label 增删改查 | 有 | ❌ 无 | ✅ 有 |
+| 搜索仓库 | 有 | ✅ 有（爬公开页） | ✅ 有（API） |
+| 用户资料 | 有 | ✅ 有 | ✅ 有 |
+| Trending/推荐 | 有 | ✅ 有（浏览器渲染） | ✅ 有（搜索 API 近似） |
+| Actions/CI | 有 | ❌ 无 | ❌ 无 |
 
-`gitee` 聚焦日常协作命令（Issue/PR/Repo 管理），不涉及 Gitee 特有功能（GVP、Pages、企业版 API）。
+`gitee-cli` 是**管理后台**（靠 token 操作私有仓库），`opencli gitee` 是**公开浏览器**（只能看公开内容）。两者互补，日常 Issue/PR 管理必须用 `gitee-cli`。
 
 ## 注意事项
 

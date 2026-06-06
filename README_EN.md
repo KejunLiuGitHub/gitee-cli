@@ -14,17 +14,27 @@ Gitee → Settings → Private Token → Generate. Check `projects`, `issues`, `
 
 ### 2. Install
 
-```bash
-# Source into your shell config for permanent use:
-echo "source /path/to/gitee" >> ~/.zshrc   # or ~/.bashrc
-```
-
-Or copy `gitee` to any directory in your PATH and make it executable:
+**Option 1 (recommended): Add to PATH**
 
 ```bash
+# 1) Copy to a system PATH directory
 sudo cp gitee /usr/local/bin/
 sudo chmod +x /usr/local/bin/gitee
+
+# 2) Verify
+gitee help
 ```
+
+**Option 2: Source into shell config**
+
+If you prefer not to copy to a system directory:
+
+```bash
+echo "source $(pwd)/gitee" >> ~/.zshrc   # or ~/.bashrc
+source ~/.zshrc                          # apply immediately
+```
+
+> ⚠️ **Note**: The `source` approach only works for the current terminal session unless you write it to your shell config. Option 1 (PATH) is recommended.
 
 ### 3. Authenticate
 
@@ -90,6 +100,14 @@ gitee whoami        # Show current user
 gitee assign <issue-number> <username>   # Assign issue
 ```
 
+### Search & Discovery (public, no token required)
+
+```bash
+gitee search <keyword> [limit]          # Search repositories (default 10, max 50)
+gitee user <username>                   # Show user profile
+gitee trending [limit]                  # Trending repositories (default 20, max 50)
+```
+
 ## Testing & Diagnostics
 
 The repo includes `./gitee-test`, a self-contained diagnostic script for AI agents and new users:
@@ -119,24 +137,25 @@ The token is sent via the `Authorization` header and **never** appears in URLs o
 
 ## Environment Variables
 
-| Variable | Required | Default |
-|----------|----------|---------|
-| `GITEE_TOKEN` | Yes | — |
-| `GITEE_OWNER` | No | Inferred from git remote |
-| `GITEE_REPO` | No | Inferred from git remote |
-| `GITEE_API_BASE` | No | `https://gitee.com/api/v5` |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GITEE_TOKEN` | Partial | — | **Required** for Issue/PR/Label operations; **not required** for public queries (search/user/trending) |
+| `GITEE_OWNER` | No | Inferred from git remote | Target repo owner |
+| `GITEE_REPO` | No | Inferred from git remote | Target repo name |
+| `GITEE_API_BASE` | No | `https://gitee.com/api/v5` | API base URL |
 
-## Comparison with `gh`
+## Comparison with `gh` / `opencli`
 
-| Feature | `gh` (GitHub) | `gitee` |
-|---------|---------------|---------|
-| Authentication | `gh auth login` | `export GITEE_TOKEN=...` |
-| Issue/PR/Repo CRUD | Yes | Yes |
-| Actions/CI | Yes | No |
-| Codespaces | Yes | No |
-| Extensions | Yes | No |
+| Feature | `gh` (GitHub) | `opencli gitee` | `gitee-cli` |
+|---------|---------------|-----------------|-------------|
+| Authentication | `gh auth login` | ❌ Not needed | `export GITEE_TOKEN=...` |
+| Issue/PR/Label CRUD | Yes | ❌ No | ✅ Yes |
+| Search repositories | Yes | ✅ Yes (scrapes public pages) | ✅ Yes (API) |
+| User profile | Yes | ✅ Yes | ✅ Yes |
+| Trending/Recommended | Yes | ✅ Yes (browser-rendered) | ✅ Yes (search API approximation) |
+| Actions/CI | Yes | ❌ No | ❌ No |
 
-`gitee` focuses on daily collaboration commands (Issue/PR/Repo management) and does not cover Gitee-specific features (GVP, Pages, Enterprise API).
+`gitee-cli` is a **management console** (token-based, operates on private repos), while `opencli gitee` is a **public browser** (can only view public content). They complement each other — daily Issue/PR management requires `gitee-cli`.
 
 ## Notes
 

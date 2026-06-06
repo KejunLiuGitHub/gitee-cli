@@ -368,6 +368,174 @@ gitee_assign() {
         | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'✅ Assigned #{d[\"number\"]} to ${user}')" 2>/dev/null
 }
 
+# ─── Search (public, no token) ───────────────────────────────
+# Uses Gitee search widget API (so.gitee.com) — same endpoint as opencli.
+gitee_search() {
+    local keyword="${1:-}" limit="${2:-10}"
+    [[ -z "$keyword" ]] && { echo "Usage: gitee search <keyword> [limit]"; return 1; }
+    # Clamp limit 1–50
+    if [[ "$limit" =~ ^[0-9]+$ ]]; then
+        [[ "$limit" -lt 1 ]] && limit=1
+        [[ "$limit" -gt 50 ]] && limit=50
+    else
+        limit=10
+    fi
+    local tmpfile
+    tmpfile=$(mktemp /tmp/gitee.XXXXXX)
+    trap "rm -f '$tmpfile'" EXIT INT TERM
+    local http_code
+    http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
+        -H "Accept: application/json" \
+        -H "User-Agent: Mozilla/5.0" \
+        -H "Referer: https://gitee.com/search?q=${keyword}&type=repository" \
+        --connect-timeout 10 --max-time 30 \
+        "https://so.gitee.com/v1/search/widget/wong1slagnlmzwvsu5ya?q=${keyword}&from=0&size=${limit}" 2>/dev/null) || true
+    if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+        python3 -c "
+import sys,json
+d=json.load(open(sys.argv[1]))
+hits=d.get('hits',{})
+rows=hits.get('hits',[]) if isinstance(hits,dict) else []
+if not rows:
+    print('No results found.')
+    sys.exit(0)
+seen=set()
+for r in rows:
+    fields=r.get('fields',{})
+    def getf(k):
+        v=fields.get(k)
+        if isinstance(v,list) and v:
+            return str(v[0])
+        return str(v) if v is not None else ''
+    name=getf('title').strip()
+    url=getf('url').strip()
+    if not name or not url or url in seen:
+        continue
+    seen.add(url)
+    desc=getf('description').strip() or '-'
+    lang=getf('langs').strip() or '-'
+    stars=getf('count.star').strip() or '-'
+    print(f'{name}')
+    print(f'  ⭐ {stars}  |  {lang}')
+    print(f'  {desc}')
+    print(f'  {url}')
+    print()
+" "$tmpfile" 2>/dev/null
+        rm -f "$tmpfile"
+        trap - EXIT INT TERM
+        return 0
+    fi
+    echo "❌ Search failed (HTTP $http_code)" >&2
+    rm -f "$tmpfile"
+    trap - EXIT INT TERM
+    return 1
+}
+
+# ─── User Profile (public, no token) ─────────────────────────
+gitee_user() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && { echo "Usage: gitee user <username>"; return 1; }
+    local tmpfile
+    tmpfile=$(mktemp /tmp/gitee.XXXXXX)
+    trap "rm -f '$tmpfile'" EXIT INT TERM
+    local http_code
+    http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
+        -H "Accept: application/json" \
+        -H "User-Agent: Mozilla/5.0" \
+        --connect-timeout 10 --max-time 30 \
+        "https://gitee.com/api/v5/users/${username}" 2>/dev/null) || true
+    if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+        python3 -c "
+import sys,json
+u=json.load(open(sys.argv[1]))
+print(f'User:    {u.get(\"login\", \"-\")}')
+print(f'Name:    {u.get(\"name\") or \"-\"}')
+print(f'Bio:     {u.get(\"bio\") or \"-\"}')
+print(f'Blog:    {u.get(\"blog\") or \"-\"}')
+print(f'Company: {u.get(\"company\") or \"-\"}')
+print(f'Location:{u.get(\"location\") or \"-\"}')
+print(f'Followers:  {u.get(\"followers\", 0)}')
+print(f'Following:  {u.get(\"following\", 0)}')
+print(f'Public repos:{u.get(\"public_repos\", 0)}')
+print(f'Created: {u.get(\"created_at\", \"-\")}')
+print(f'URL:     {u.get(\"html_url\", \"-\")}')
+" "$tmpfile" 2>/dev/null
+        rm -f "$tmpfile"
+        trap - EXIT INT TERM
+        return 0
+    fi
+    if [[ "$http_code" == "404" ]]; then
+        echo "❌ User '${username}' not found." >&2
+    else
+        echo "❌ Failed to fetch user profile (HTTP $http_code)" >&2
+    fi
+    rm -f "$tmpfile"
+    trap - EXIT INT TERM
+    return 1
+}
+
+# ─── Trending / Recommended (public, no token) ───────────────
+# Gitee Explore requires a browser (JS-rendered), so we approximate
+# by querying the search widget for most-starred repos — same data
+# source opencli uses, just accessed via curl instead of a browser.
+gitee_trending() {
+    local limit="${1:-20}"
+    if [[ "$limit" =~ ^[0-9]+$ ]]; then
+        [[ "$limit" -lt 1 ]] && limit=1
+        [[ "$limit" -gt 50 ]] && limit=50
+    else
+        limit=20
+    fi
+    local tmpfile
+    tmpfile=$(mktemp /tmp/gitee.XXXXXX)
+    trap "rm -f '$tmpfile'" EXIT INT TERM
+    local http_code
+    http_code=$(curl -sS -w "%{http_code}" -o "$tmpfile" \
+        -H "Accept: application/json" \
+        -H "User-Agent: Mozilla/5.0" \
+        -H "Referer: https://gitee.com/search?q=a&type=repository" \
+        --connect-timeout 10 --max-time 30 \
+        "https://so.gitee.com/v1/search/widget/wong1slagnlmzwvsu5ya?q=a&sort=stars_count&order=desc&from=0&size=${limit}" 2>/dev/null) || true
+    if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+        python3 -c "
+import sys,json
+d=json.load(open(sys.argv[1]))
+hits=d.get('hits',{})
+rows=hits.get('hits',[]) if isinstance(hits,dict) else []
+if not rows:
+    print('No trending repositories found.')
+    sys.exit(0)
+seen=set()
+for r in rows:
+    fields=r.get('fields',{})
+    def getf(k):
+        v=fields.get(k)
+        if isinstance(v,list) and v:
+            return str(v[0])
+        return str(v) if v is not None else ''
+    name=getf('title').strip()
+    url=getf('url').strip()
+    if not name or not url or url in seen:
+        continue
+    seen.add(url)
+    desc=getf('description').strip() or '-'
+    stars=getf('count.star').strip() or '-'
+    print(f'{name}')
+    print(f'  ⭐ {stars}')
+    print(f'  {desc}')
+    print(f'  {url}')
+    print()
+" "$tmpfile" 2>/dev/null
+        rm -f "$tmpfile"
+        trap - EXIT INT TERM
+        return 0
+    fi
+    echo "❌ Trending fetch failed (HTTP $http_code)" >&2
+    rm -f "$tmpfile"
+    trap - EXIT INT TERM
+    return 1
+}
+
 # ─── Main Dispatch ───────────────────────────────────────────
 gitee() {
     local cmd="${1:-}"
@@ -378,6 +546,9 @@ gitee() {
         label|labels)    shift; gitee_label "$@" ;;
         whoami|who)      shift; gitee_whoami "$@" ;;
         assign)          shift; gitee_assign "$@" ;;
+        search)          shift; gitee_search "$@" ;;
+        user)            shift; gitee_user "$@" ;;
+        trending)        shift; gitee_trending "$@" ;;
         help|--help|-h)
             echo "gitee — Gitee API v5 CLI (like gh for GitHub)"
             echo ""
@@ -405,6 +576,9 @@ gitee() {
             echo "  gitee label delete <name>             Delete label"
             echo "  gitee assign <issue> <username>       Assign issue"
             echo "  gitee whoami                          Show current user"
+            echo "  gitee search <keyword> [limit]        Search repositories"
+            echo "  gitee user <username>                 Show user profile"
+            echo "  gitee trending [limit]                Trending repositories"
             echo ""
             echo "Auth: token via Authorization header (never in URL/body)"
             echo "Setup: export GITEE_TOKEN='your-token'"

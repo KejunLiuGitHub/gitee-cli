@@ -175,15 +175,33 @@ fi
 
 echo ""
 
-# 3. API Smoke Tests
-echo "[3/4] API Smoke Tests"
-REPORT+="\n## API Smoke Tests\n\n"
+# 3. API Smoke Tests (public — no token needed)
+echo "[3/5] API Smoke Tests (Public)"
+REPORT+="\n## API Smoke Tests (Public)\n\n"
 
 if _cmd_exists curl; then
     run_test "Network: gitee.com reachable" \
         "curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code}' https://gitee.com" \
         1
+
+    run_test "Public API: search repositories" \
+        "$GITEE_BIN search vue 3" \
+        1
+
+    run_test "Public API: user profile" \
+        "$GITEE_BIN user linus" \
+        1
+
+    run_test "Public API: trending" \
+        "$GITEE_BIN trending 3" \
+        1
 fi
+
+echo ""
+
+# 4. API Smoke Tests (authenticated — requires token)
+echo "[4/5] API Smoke Tests (Authenticated)"
+REPORT+="\n## API Smoke Tests (Authenticated)\n\n"
 
 if [[ -n "${GITEE_TOKEN:-}" ]]; then
     run_test "API: whoami" \
@@ -212,18 +230,18 @@ if [[ -n "${GITEE_TOKEN:-}" ]]; then
             "GITEE_TOKEN='bad-token-1234' $GITEE_BIN whoami" \
             0
     else
-        _skip "API smoke tests — owner/repo unknown"
-        REPORT+="## ⏭️ API Smoke Tests\n\nSkipped: owner/repo could not be inferred.\n\n"
+        _skip "Authenticated API smoke tests — owner/repo unknown"
+        REPORT+="## ⏭️ Authenticated API Smoke Tests\n\nSkipped: owner/repo could not be inferred.\n\n"
     fi
 else
-    _skip "API smoke tests — GITEE_TOKEN not set"
-    REPORT+="## ⏭️ API Smoke Tests\n\nSkipped: GITEE_TOKEN not set.\n\n"
+    _skip "Authenticated API smoke tests — GITEE_TOKEN not set"
+    REPORT+="## ⏭️ Authenticated API Smoke Tests\n\nSkipped: GITEE_TOKEN not set.\n\n"
 fi
 
 echo ""
 
-# 4. Script sanity
-echo "[4/4] Script Sanity"
+# 5. Script sanity
+echo "[5/5] Script Sanity"
 REPORT+="\n## Script Sanity\n\n"
 
 run_test "Syntax: gitee script parses" \
